@@ -47,9 +47,6 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\README.txt" />
-  </ItemGroup>
-  <ItemGroup>
     <Filter Include="imgui">
       <UniqueIdentifier>{9044ef92-2afa-42f2-92df-ac473c7c32b3}</UniqueIdentifier>
     </Filter>

@@ -1,0 +1,223 @@
+# Root .gitignore for ChessNode (based on VisualStudio + C++ templates, trimmed for this repo)
+
+### C++ / Toolchain ###
+*.d
+*.o
+*.obj
+*.lo
+*.slo
+*.gch
+*.pch
+*.so
+*.dylib
+*.dll
+*.a
+*.la
+*.lai
+*.lib
+*.exe
+*.out
+*.app
+*.mod
+*.smod
+
+# Static analysis / profiling artifacts
+*.gcno
+*.gcda
+*.profraw
+*.profdata
+
+### Windows ###
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+### Visual Studio Builds ###
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+.vs/
+Generated\ Files/
+
+# Intermediate / compiler outputs
+*.ilk
+*.iobj
+*.ipdb
+*.pdb
+*.idb
+*.pgc
+*.pgd
+*.rsp
+*.sbr
+*.tlb
+*.tli
+*.tlh
+*.tmp
+*.tmp_proj
+*.log
+*.tlog
+*.manifest
+*.metagen
+
+# Caches
+ipch/
+*.VC.db
+*.VC.VC.opendb
+*.opensdf
+*.sdf
+*.cachefile
+
+# User / IDE specific
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+mono_crash.*
+
+# Test / Coverage outputs
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.VisualState.xml
+TestResult.xml
+nunit-*.xml
+BenchmarkDotNet.Artifacts/
+coverage*.json
+coverage*.xml
+coverage*.info
+*.coverage
+*.coveragexml
+
+# Code analysis / tooling
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+_TeamCity*
+*.dotCover
+.axoCover/*
+!.axoCover/settings.json
+nCrunchTemp_*
+_NCrunch_*
+.*crunch*.local.xml
+
+# Package managers / dependencies
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+node_modules/
+.paket/
+paket-files/
+
+# Publish / deployment
+publish/
+[Ee]xpress/
+*_i.c
+*_p.c
+*_h.h
+dlldata.c
+*.pubxml
+*.publishproj
+*.azurePubxml
+PublishScripts/
+AppPackages/
+BundleArtifacts/
+*.appx
+*.appxbundle
+*.appxupload
+
+# Misc generated
+*.meta
+*.svclog
+*.psess
+*.vsp
+*.vspx
+*.e2e
+*_wpftmp.csproj
+ScaffoldingReadMe.txt
+StyleCopReport.xml
+DocProject/buildhelp/
+DocProject/Help/*
+*.GhostDoc.xml
+_mfractor/
+.localhistory/
+.vshistory/
+MigrationBackup/
+*.binlog
+*.nvuser
+*.jmconfig
+
+# Backup / temp / others
+~$*
+*~
+*.bak
+*.tmp
+*.old
+*.orig
+*.swp
+
+# Security / credentials (ensure none exist before pushing)
+*.pfx
+*.publishsettings
+# Uncomment if using snk
+#*.snk
+
+# SQLite / DB dumps
+*.mdf
+*.ldf
+*.ndf
+
+# Python cache (if any scripts)
+__pycache__/
+*.pyc
+
+# VS Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+.history/
+
+# ImGui / Examples specific additions
+examples/**/build/
+examples/**/CMakeCache.txt
+examples/**/CMakeFiles/
+examples/**/cmake_install.cmake
+examples/**/Makefile
+
+# SDL / third-party build outputs
+SDL3/build/
+SDL3/**/Debug/
+SDL3/**/Release/
+SDL3/**/x64/
+
+# Generated chess engine libs
+**/chessnative*.lib
+**/chessnative*.dll
+**/chessnative*.exp
+**/chessnative*.pdb
+
+# Ignore test logs
+*.testlog
+
+# Keep source assets (PNG, WAV) so DO NOT ignore content folders
+# (Add exceptions here if you later add build artifacts inside content)
+
+# End of file
