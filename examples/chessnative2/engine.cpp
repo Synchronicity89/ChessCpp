@@ -73,135 +73,29 @@ std::string to_fen(const Position& pos){ auto pieceAt=[&](int sq){ uint64_t b=bb
     s += pos.sideToMove==0?" w ":" b "; std::string cast; if(pos.castleRights&1) cast+='K'; if(pos.castleRights&2) cast+='Q'; if(pos.castleRights&4) cast+='k'; if(pos.castleRights&8) cast+='q'; if(cast.empty()) cast="-"; s += cast + ' ';
     if(pos.epSquare>=0){ int f=file_of(pos.epSquare), r=rank_of(pos.epSquare); s.push_back(char('a'+f)); s.push_back(char('1'+r)); } else s+="-"; s += ' '+std::to_string(pos.halfmoveClock)+' '+std::to_string(pos.fullmoveNumber); return s; }
 
-int evaluate_material(const Position& pos){ int w=0,b=0; auto add=[&](uint64_t bb,int val,bool white){ for(;bb; bb &= bb-1){ if(white) w+=val; else b+=val; } }; add(pos.bb.WP,pieceValue[0],true); add(pos.bb.BP,pieceValue[0],false); add(pos.bb.WN,pieceValue[1],true); add(pos.bb.BN,pieceValue[1],false); add(pos.bb.WB,pieceValue[2],true); add(pos.bb.BB,pieceValue[2],false); add(pos.bb.WR,pieceValue[3],true); add(pos.bb.BR,pieceValue[3],false); add(pos.bb.WQ,pieceValue[4],true); add(pos.bb.BQ,pieceValue[4],false); return w-b; }
-int evaluate(const Position& pos){ return evaluate_material(pos) + nnue_eval(pos); }
+int evaluate_material(const Position& pos){ int w=0,b=0; auto add=[&](uint64_t bb,int val,bool white){ while(bb){ bb &= bb-1; if(white) w+=val; else b+=val; } }; add(pos.bb.WP,pieceValue[0],true); add(pos.bb.BP,pieceValue[0],false); add(pos.bb.WN,pieceValue[1],true); add(pos.bb.BN,pieceValue[1],false); add(pos.bb.WB,pieceValue[2],true); add(pos.bb.BB,pieceValue[2],false); add(pos.bb.WR,pieceValue[3],true); add(pos.bb.BR,pieceValue[3],false); add(pos.bb.WQ,pieceValue[4],true); add(pos.bb.BQ,pieceValue[4],false); return w-b; }
+// Side-perspective material: positive if side to move is ahead; negative if behind.
+static int evaluate_side(const Position& pos){ int mat = evaluate_material(pos); return (pos.sideToMove==0)? mat : -mat; }
+int evaluate(const Position& pos){ return evaluate_side(pos); }
 
-// Return bitboard of pieces from side 'byWhite' attacking 'sq'.
-uint64_t attackers_to(const Position& pos, int sq, int byWhite)
-{
-    uint64_t attackers = 0ULL;
-    uint64_t occ = pos.bb.occAll;
-    int f = file_of(sq);
-    int r = rank_of(sq);
+uint64_t attackers_to(const Position& pos, int sq, int byWhite){ uint64_t attackers=0ULL; uint64_t occ=pos.bb.occAll; int f=file_of(sq), r=rank_of(sq);
+    if(byWhite){ if(r>0){ if(f<7){ int p=sq-7; if(p>=0 && (pos.bb.WP & bb(p))) attackers |= bb(p);} if(f>0){ int p=sq-9; if(p>=0 && (pos.bb.WP & bb(p))) attackers |= bb(p);} } }
+    else { if(r<7){ if(f>0){ int p=sq+7; if(p<64 && (pos.bb.BP & bb(p))) attackers |= bb(p);} if(f<7){ int p=sq+9; if(p<64 && (pos.bb.BP & bb(p))) attackers |= bb(p);} } }
+    attackers |= knightMask[sq] & (byWhite?pos.bb.WN:pos.bb.BN);
+    attackers |= kingMask[sq] & (byWhite?pos.bb.WK:pos.bb.BK);
+    auto ray_scan=[&](const int* df,const int* dr,int c,uint64_t mask){ for(int d=0; d<c; ++d){ int cf=f, cr=r; while(true){ cf+=df[d]; cr+=dr[d]; if(cf<0||cf>7||cr<0||cr>7) break; int s=cr*8+cf; uint64_t b=bb(s); if(occ & b){ if(mask & b) attackers |= b; break; } } } };
+    const int bdf[4]={1,1,-1,-1}; const int bdr[4]={1,-1,1,-1}; uint64_t bq= byWhite? (pos.bb.WB|pos.bb.WQ):(pos.bb.BB|pos.bb.BQ); ray_scan(bdf,bdr,4,bq);
+    const int rdf[4]={1,-1,0,0}; const int rdr[4]={0,0,1,-1}; uint64_t rq= byWhite? (pos.bb.WR|pos.bb.WQ):(pos.bb.BR|pos.bb.BQ); ray_scan(rdf,rdr,4,rq);
+    return attackers; }
 
-    // Pawns (reverse map)
-    if (byWhite)
-    {
-        // White pawns that could attack sq came from sq-7 (file +1) or sq-9 (file -1)
-        if (r > 0)
-        {
-            if (f < 7)
-            {
-                int p = sq - 7;
-                if (p >= 0 && (pos.bb.WP & (1ULL << p))) attackers |= (1ULL << p);
-            }
-            if (f > 0)
-            {
-                int p = sq - 9;
-                if (p >= 0 && (pos.bb.WP & (1ULL << p))) attackers |= (1ULL << p);
-            }
-        }
-    }
-    else
-    {
-        // Black pawns that could attack sq came from sq+7 (file -1) or sq+9 (file +1)
-        if (r < 7)
-        {
-            if (f > 0)
-            {
-                int p = sq + 7;
-                if (p < 64 && (pos.bb.BP & (1ULL << p))) attackers |= (1ULL << p);
-            }
-            if (f < 7)
-            {
-                int p = sq + 9;
-                if (p < 64 && (pos.bb.BP & (1ULL << p))) attackers |= (1ULL << p);
-            }
-        }
-    }
-
-    // Knights
-    const uint64_t knightSources = byWhite ? pos.bb.WN : pos.bb.BN;
-    attackers |= knightMask[sq] & knightSources;
-
-    // Kings
-    const uint64_t kingSource = byWhite ? pos.bb.WK : pos.bb.BK;
-    attackers |= kingMask[sq] & kingSource;
-
-    // Sliding pieces (bishops / rooks / queens) via ray tracing from target outward:
-    auto ray_scan = [&](const int* df, const int* dr, int dirCount, uint64_t pieceMask)
-    {
-        for (int d = 0; d < dirCount; ++d)
-        {
-            int cf = f;
-            int cr = r;
-            while (true)
-            {
-                cf += df[d];
-                cr += dr[d];
-                if (cf < 0 || cf > 7 || cr < 0 || cr > 7) break;
-                int s = cr * 8 + cf;
-                uint64_t b = (1ULL << s);
-                if (occ & b)
-                {
-                    if (pieceMask & b)
-                        attackers |= b;
-                    break; // blocked
-                }
-            }
-        }
-    };
-
-    // Bishop/diagonal directions
-    const int bdf[4] = { 1, 1, -1, -1 };
-    const int bdr[4] = { 1, -1, 1, -1 };
-    uint64_t bishopsQueens = byWhite ? (pos.bb.WB | pos.bb.WQ) : (pos.bb.BB | pos.bb.BQ);
-    ray_scan(bdf, bdr, 4, bishopsQueens);
-
-    // Rook/orthogonal directions
-    const int rdf[4] = { 1, -1, 0, 0 };
-    const int rdr[4] = { 0, 0, 1, -1 };
-    uint64_t rooksQueens = byWhite ? (pos.bb.WR | pos.bb.WQ) : (pos.bb.BR | pos.bb.BQ);
-    ray_scan(rdf, rdr, 4, rooksQueens);
-
-    return attackers;
-}
-
-bool square_attacked(const Position& pos, int sq, int byWhite)
-{
-    return attackers_to(pos, sq, byWhite) != 0ULL;
-}
+bool square_attacked(const Position& pos, int sq, int byWhite){ return attackers_to(pos,sq,byWhite)!=0ULL; }
 
 void apply_move(const Position& pos, const Move& m, Position& out){ out=pos; uint64_t fromB=bb(m.from), toB=bb(m.to); bool white= (pos.sideToMove==0); auto movePiece=[&](uint64_t &bbt){ if(bbt & fromB){ bbt ^= fromB; bbt |= toB; } };
     if(m.isCapture){ if(white){ out.bb.BP&=~toB; out.bb.BN&=~toB; out.bb.BB&=~toB; out.bb.BR&=~toB; out.bb.BQ&=~toB; out.bb.BK&=~toB; } else { out.bb.WP&=~toB; out.bb.WN&=~toB; out.bb.WB&=~toB; out.bb.WR&=~toB; out.bb.WQ&=~toB; out.bb.WK&=~toB; } }
     if(white){ movePiece(out.bb.WP); movePiece(out.bb.WN); movePiece(out.bb.WB); movePiece(out.bb.WR); movePiece(out.bb.WQ); movePiece(out.bb.WK);} else { movePiece(out.bb.BP); movePiece(out.bb.BN); movePiece(out.bb.BB); movePiece(out.bb.BR); movePiece(out.bb.BQ); movePiece(out.bb.BK);} if(m.promo){ if(white){ out.bb.WP&=~toB; switch(std::tolower((unsigned char)m.promo)){ case 'n': out.bb.WN|=toB; break; case 'b': out.bb.WB|=toB; break; case 'r': out.bb.WR|=toB; break; default: out.bb.WQ|=toB; break; } } else { out.bb.BP&=~toB; switch(std::tolower((unsigned char)m.promo)){ case 'n': out.bb.BN|=toB; break; case 'b': out.bb.BB|=toB; break; case 'r': out.bb.BR|=toB; break; default: out.bb.BQ|=toB; break; } } }
-    if(m.isCastle){
-        if(white){
-            if(m.to==6){ // white O-O (e1->g1)
-                out.bb.WR &= ~bb(7);
-                out.bb.WR |= bb(5);
-            } else if(m.to==2){ // white O-O-O (e1->c1)
-                out.bb.WR &= ~bb(0);
-                out.bb.WR |= bb(3);
-            }
-        } else {
-            if(m.to==62){ // black O-O (e8->g8)
-                out.bb.BR &= ~bb(63);
-                out.bb.BR |= bb(61);
-            } else if(m.to==58){ // black O-O-O (e8->c8)
-                out.bb.BR &= ~bb(56);
-                out.bb.BR |= bb(59);
-            }
-        }
-    }
+    if(m.isCastle){ if(white){ if(m.to==6){ out.bb.WR &= ~bb(7); out.bb.WR |= bb(5);} else if(m.to==2){ out.bb.WR &= ~bb(0); out.bb.WR |= bb(3);} } else { if(m.to==62){ out.bb.BR &= ~bb(63); out.bb.BR |= bb(61);} else if(m.to==58){ out.bb.BR &= ~bb(56); out.bb.BR |= bb(59);} } }
     out.bb.occWhite = out.bb.WP|out.bb.WN|out.bb.WB|out.bb.WR|out.bb.WQ|out.bb.WK; out.bb.occBlack = out.bb.BP|out.bb.BN|out.bb.BB|out.bb.BR|out.bb.BQ|out.bb.BK; out.bb.occAll = out.bb.occWhite | out.bb.occBlack;
-    if(!white) out.fullmoveNumber++; out.sideToMove = white?1:0; out.epSquare=-1; auto strip=[&](int mask){ out.castleRights &= ~mask; }; // update castle rights only for affected side pieces
-    if(m.from==4) strip(1|2); // white king moved
-    if(m.from==60) strip(4|8); // black king moved
-    if(m.from==0||m.to==0) strip(2); // white queenside rook moved/captured
-    if(m.from==7||m.to==7) strip(1); // white kingside rook moved/captured
-    if(m.from==56||m.to==56) strip(8); // black queenside rook moved/captured
-    if(m.from==63||m.to==63) strip(4); // black kingside rook moved/captured
+    if(!white) out.fullmoveNumber++; out.sideToMove = white?1:0; out.epSquare=-1; auto strip=[&](int mask){ out.castleRights &= ~mask; }; if(m.from==4) strip(1|2); if(m.from==60) strip(4|8); if(m.from==0||m.to==0) strip(2); if(m.from==7||m.to==7) strip(1); if(m.from==56||m.to==56) strip(8); if(m.from==63||m.to==63) strip(4);
 }
 
 static void add_move(std::vector<Move>& v,int from,int to,bool cap=false,char promo=0,bool castle=false){ Move m; m.from=from; m.to=to; m.isCapture=cap; m.promo=promo; m.isCastle=castle; m.isEnPassant=false; m.isDoublePawnPush=false; v.push_back(m);} 
@@ -227,8 +121,7 @@ void filter_legal(const Position& pos, const std::vector<Move>& pseudo, std::vec
     int ownKingSq = lsb_index(white ? pos.bb.WK : pos.bb.BK);
     if (ownKingSq < 0) return; // corrupted position safeguard
     for (const auto& m : pseudo){
-        // Disallow capturing king square outright
-        if ((oppKing & (1ULL << m.to)) != 0ULL) continue;
+        if ((oppKing & bb(m.to)) != 0ULL) continue;
         apply_move(pos, m, tmp);
         int newKingSq = lsb_index(white ? tmp.bb.WK : tmp.bb.BK);
         if (newKingSq < 0) continue;
@@ -237,12 +130,15 @@ void filter_legal(const Position& pos, const std::vector<Move>& pseudo, std::vec
     }
 }
 
-int negamax(Position& pos, int depth, int alpha, int beta, std::vector<Move>& pv){ if(depth==0) return evaluate(pos)*(pos.sideToMove==0?1:-1); std::vector<Move> pseudo; generate_pseudo_moves(pos,pseudo); std::vector<Move> legal; filter_legal(pos,pseudo,legal); if(legal.empty()) return evaluate(pos)*(pos.sideToMove==0?1:-1); int best=-std::numeric_limits<int>::max(); Move bestM; for(auto &m: legal){ Position next; apply_move(pos,m,next); int score = -negamax(next,depth-1,-beta,-alpha,pv); if(score>best){ best=score; bestM=m; } if(score>alpha) alpha=score; if(alpha>=beta) break; } pv.clear(); pv.push_back(bestM); return best; }
+int negamax(Position& pos, int depth, int alpha, int beta, std::vector<Move>& pv){ if(depth==0) return evaluate(pos); std::vector<Move> pseudo; generate_pseudo_moves(pos,pseudo); std::vector<Move> legal; filter_legal(pos,pseudo,legal); if(legal.empty()) return evaluate(pos); int best=-10000000; Move bestM{}; for(auto &m: legal){ Position next; apply_move(pos,m,next); int score = -negamax(next, depth-1, -beta, -alpha, pv); if(score>best){ best=score; bestM=m; } if(score>alpha) alpha=score; if(alpha>=beta) break; } pv.clear(); pv.push_back(bestM); return best;
+}
 
 std::string move_to_uci(const Move& m){ std::string s; s.push_back(char('a'+file_of(m.from))); s.push_back(char('1'+rank_of(m.from))); s.push_back(char('a'+file_of(m.to))); s.push_back(char('1'+rank_of(m.to))); if(m.promo) s.push_back(std::tolower((unsigned char)m.promo)); return s; }
 
-std::string choose_move(const std::string& fen, int depth){ Position p; if(!parse_fen(fen,p)) return std::string(); std::vector<Move> pseudo; generate_pseudo_moves(p,pseudo); std::vector<Move> legal; filter_legal(p,pseudo,legal); if(legal.empty()) return std::string(); int alpha=-100000,beta=100000; int best=-100000; Move bestM; std::vector<Move> pv; for(auto &m: legal){ Position next; apply_move(p,m,next); int score = -negamax(next, depth-1, -beta, -alpha, pv); if(score>best){ best=score; bestM=m; } if(score>alpha) alpha=score; } return move_to_uci(bestM); }
+static int piece_value_at(const Position& p, int sq){ uint64_t b = bb(sq); if(p.bb.WP & b || p.bb.BP & b) return pieceValue[0]; if(p.bb.WN & b || p.bb.BN & b) return pieceValue[1]; if(p.bb.WB & b || p.bb.BB & b) return pieceValue[2]; if(p.bb.WR & b || p.bb.BR & b) return pieceValue[3]; if(p.bb.WQ & b || p.bb.BQ & b) return pieceValue[4]; return pieceValue[5]; }
 
+std::string choose_move(const std::string& fen, int depth){ Position p; if(!parse_fen(fen,p)) return std::string(); std::vector<Move> pseudo; generate_pseudo_moves(p,pseudo); std::vector<Move> legal; filter_legal(p,pseudo,legal); if(legal.empty()) return std::string(); int alpha=-1000000,beta=1000000; int best=-1000000; Move bestM{}; std::vector<Move> pv; for(auto &m: legal){ Position next; apply_move(p,m,next); int score = -negamax(next, depth-1, -beta, -alpha, pv); if(score>best){ best=score; bestM=m; } if(score>alpha) alpha=score; } return move_to_uci(bestM); }
+std::vector<std::pair<std::string,int>> root_search_scores(const std::string& fen, int depth){ Position p; std::vector<std::pair<std::string,int>> out; if(!parse_fen(fen,p)) return out; std::vector<Move> pseudo; generate_pseudo_moves(p,pseudo); std::vector<Move> legal; filter_legal(p,pseudo,legal); if(legal.empty()) return out; int alpha=-1000000,beta=1000000; std::vector<Move> pv; for(auto &m: legal){ Position next; apply_move(p,m,next); int score = -negamax(next, depth-1, -beta, -alpha, pv); if(score>alpha) alpha=score; out.emplace_back(move_to_uci(m), score); } return out; }
 std::vector<std::string> legal_moves_uci(const std::string& fen){ Position p; std::vector<std::string> out; if(!parse_fen(fen,p)) return out; std::vector<Move> pseudo; generate_pseudo_moves(p,pseudo); std::vector<Move> legal; filter_legal(p,pseudo,legal); for(auto &m: legal) out.push_back(move_to_uci(m)); return out; }
 
 uint64_t perft(Position& pos, int depth){ if(depth==0) return 1ULL; std::vector<Move> pseudo; generate_pseudo_moves(pos,pseudo); std::vector<Move> legal; filter_legal(pos,pseudo,legal); if(depth==1) return (uint64_t)legal.size(); uint64_t nodes=0; for(auto &m: legal){ Position next; apply_move(pos,m,next); nodes += perft(next, depth-1); } return nodes; }

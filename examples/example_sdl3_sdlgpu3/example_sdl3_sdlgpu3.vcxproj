@@ -172,6 +172,14 @@
     <ClInclude Include="..\..\imgui.h" />
     <ClInclude Include="..\..\imgui_internal.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\chessnative2\chessnative2.vcxproj">
+      <Project>{1e446906-e32e-4a94-835c-ac92ccc82eba}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\Controller\Controller.vcxproj">
+      <Project>{6005cf31-f7e4-4b93-bd5b-6314a30c7ed9}</Project>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />
 </Project>

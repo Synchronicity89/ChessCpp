@@ -57,6 +57,8 @@ int negamax(Position& pos, int depth, int alpha, int beta, std::vector<Move>& pv
 
 // Top-level choice
 std::string choose_move(const std::string& fen, int depth);
+// New: return (uci, score) for all legal moves searched to depth.
+std::vector<std::pair<std::string,int>> root_search_scores(const std::string& fen, int depth);
 // Return all legal moves in UCI from a FEN (no search), empty on error.
 std::vector<std::string> legal_moves_uci(const std::string& fen);
 

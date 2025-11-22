@@ -28,22 +28,31 @@
 #include <cctype>
 #include <algorithm>
 #include <sstream>
-#ifdef _DEBUG
-#pragma comment(lib, "..\\..\\x64\\Debug\\chessnative2.lib")
-#else
-#pragma comment(lib, "..\\..\\x64\\Release\\chessnative2.lib")
-#endif
+#include "../Controller/Control.hpp"
+
+namespace {
+    struct NativeEngineAdapter : controller::IChessEngine {
+        std::vector<std::string> legal_moves(const std::string& fen) override { return engine::legal_moves_uci(fen); }
+        std::string choose_move(const std::string& fen, int depth) override { return engine::choose_move(fen, depth); }
+    };
+}
+
+// #ifdef _DEBUG
+//#pragma comment(lib, "..\\..\\x64\\Debug\\chessnative2.lib")
+// #else
+//#pragma comment(lib, "..\\..\\x64\\Release\\chessnative2.lib")
+// #endif
 
 // Added missing piece texture container types.
 struct PieceTex { SDL_GPUTexture* tex = nullptr; int w = 0; int h = 0; };
 static std::unordered_map<std::string, PieceTex> piece_textures;
 
 // Piece mapping from FEN char to texture key
-static std::string PieceKey(char c){
-    switch(c){
-        case 'P': return "white-pawn"; case 'N': return "white-knight"; case 'B': return "white-bishop"; case 'R': return "white-rook"; case 'Q': return "white-queen"; case 'K': return "white-king";
-        case 'p': return "black-pawn"; case 'n': return "black-knight"; case 'b': return "black-bishop"; case 'r': return "black-rook"; case 'q': return "black-queen"; case 'k': return "black-king";
-        default: return "";
+static std::string PieceKey(char c) {
+    switch (c) {
+    case 'P': return "white-pawn"; case 'N': return "white-knight"; case 'B': return "white-bishop"; case 'R': return "white-rook"; case 'Q': return "white-queen"; case 'K': return "white-king";
+    case 'p': return "black-pawn"; case 'n': return "black-knight"; case 'b': return "black-bishop"; case 'r': return "black-rook"; case 'q': return "black-queen"; case 'k': return "black-king";
+    default: return "";
     }
 }
 
@@ -101,60 +110,62 @@ static SDL_GPUTexture* LoadPNGTexture(SDL_GPUDevice* dev, const char* path)
 // Parse board portion of FEN into 64 indices
 static void ParseBoard(const char* fen, char out[64])
 {
-    for(int i=0;i<64;++i) out[i]='.';
-    const char* p=fen; int sq=56; // start rank8 file a = index 56
-    while(*p && *p!=' '){
-        if (*p=='/') { sq -= 16; p++; continue; }
-        if (*p>='1' && *p<='8'){ sq += (*p - '0'); p++; continue; }
+    for (int i = 0; i < 64; ++i) out[i] = '.';
+    const char* p = fen; int sq = 56; // start rank8 file a = index 56
+    while (*p && *p != ' ') {
+        if (*p == '/') { sq -= 16; p++; continue; }
+        if (*p >= '1' && *p <= '8') { sq += (*p - '0'); p++; continue; }
         out[sq++] = *p; p++;
     }
 }
 
 static int AlgebraicToIndex(const char* s)
 {
-    if (!s || s[0]<'a' || s[0]>'h' || s[1]<'1' || s[1]>'8') return -1;
-    int file = s[0]-'a';
-    int rank = s[1]-'1'; // 0 bottom, 7 top
-    return rank*8 + file;
+    if (!s || s[0] < 'a' || s[0]>'h' || s[1] < '1' || s[1]>'8') return -1;
+    int file = s[0] - 'a';
+    int rank = s[1] - '1'; // 0 bottom, 7 top
+    return rank * 8 + file;
 }
 
 static void ApplyUCIMoveToBoardSquares(const std::string& uci, char board[64])
 {
     if (uci.size() < 4) return;
     int from = AlgebraicToIndex(uci.c_str());
-    int to   = AlgebraicToIndex(uci.c_str()+2);
-    if (from<0 || to<0) return;
-    char piece = board[from]; if (piece=='.') return;
+    int to = AlgebraicToIndex(uci.c_str() + 2);
+    if (from < 0 || to < 0) return;
+    char piece = board[from]; if (piece == '.') return;
     // Clear source
     board[from] = '.';
     // Promotion?
-    if (uci.size() >= 5){
+    if (uci.size() >= 5) {
         char p = uci[4];
-        if (piece>='A' && piece<='Z') p = (char)toupper((unsigned char)p); // white
+        if (piece >= 'A' && piece <= 'Z') p = (char)toupper((unsigned char)p); // white
         board[to] = p;
-    } else {
+    }
+    else {
         board[to] = piece;
     }
     // Handle simple castling rook move
-    if (piece=='K'){
+    if (piece == 'K') {
         // white short e1g1, long e1c1
-        if (!strcmp(uci.c_str(),"e1g1")) { board[5] = 'R'; board[7] = '.'; }
-        else if (!strcmp(uci.c_str(),"e1c1")) { board[3] = 'R'; board[0] = '.'; }
-    } else if (piece=='k'){
-        if (!strcmp(uci.c_str(),"e8g8")) { board[61] = 'r'; board[63] = '.'; }
-        else if (!strcmp(uci.c_str(),"e8c8")) { board[59] = 'r'; board[56] = '.'; }
+        if (!strcmp(uci.c_str(), "e1g1")) { board[5] = 'R'; board[7] = '.'; }
+        else if (!strcmp(uci.c_str(), "e1c1")) { board[3] = 'R'; board[0] = '.'; }
+    }
+    else if (piece == 'k') {
+        if (!strcmp(uci.c_str(), "e8g8")) { board[61] = 'r'; board[63] = '.'; }
+        else if (!strcmp(uci.c_str(), "e8c8")) { board[59] = 'r'; board[56] = '.'; }
     }
 }
 
-static std::string IndexToAlg(int idx){ int f=idx%8; int r=idx/8; return std::string(1,char('a'+f))+char('1'+r); }
+static std::string IndexToAlg(int idx) { int f = idx % 8; int r = idx / 8; return std::string(1, char('a' + f)) + char('1' + r); }
 
 // Build minimal FEN from board array and side to move
-static std::string BuildFEN(const char board[64], bool whiteToMove, int fullmove){
-    std::string s; for(int rank=7; rank>=0; --rank){ int empty=0; for(int file=0; file<8; ++file){ int idx=rank*8+file; char pc=board[idx]; if(pc=='.'){ empty++; } else { if(empty){ s.push_back(char('0'+empty)); empty=0; } s.push_back(pc); } } if(empty) s.push_back(char('0'+empty)); if(rank) s.push_back('/'); }
-    s += whiteToMove? " w " : " b "; s += "KQkq - 0 "; s += std::to_string(fullmove); return s;
+static std::string BuildFEN(const char board[64], bool whiteToMove, int fullmove) {
+    std::string s; for (int rank = 7; rank >= 0; --rank) { int empty = 0; for (int file = 0; file < 8; ++file) { int idx = rank * 8 + file; char pc = board[idx]; if (pc == '.') { empty++; } else { if (empty) { s.push_back(char('0' + empty)); empty = 0; } s.push_back(pc); } } if (empty) s.push_back(char('0' + empty)); if (rank) s.push_back('/'); }
+    s += whiteToMove ? " w " : " b "; s += "KQkq - 0 "; s += std::to_string(fullmove); return s;
 }
 // Selection state
-struct PendingMove { int from=-1; };
+struct PendingMove { int from = -1; };
 
 int main(int, char**)
 {
@@ -194,7 +205,7 @@ int main(int, char**)
 
     // Load chess piece textures
     {
-        const char* names[] = {"white-pawn","white-knight","white-bishop","white-rook","white-queen","white-king","black-pawn","black-knight","black-bishop","black-rook","black-queen","black-king"};
+        const char* names[] = { "white-pawn","white-knight","white-bishop","white-rook","white-queen","white-king","black-pawn","black-knight","black-bishop","black-rook","black-queen","black-king" };
         for (auto key : names)
         {
             std::string path = std::string("..\\example_sdl3_sdlgpu3\\content\\img\\") + key + ".png";
@@ -205,7 +216,7 @@ int main(int, char**)
 
     // Load WAV
     const char* wav_path = "content/NewYearsEveWaltz.wav";
-    SDL_AudioSpec src_spec{}; Uint8* src_buf=nullptr; Uint32 src_len=0;
+    SDL_AudioSpec src_spec{}; Uint8* src_buf = nullptr; Uint32 src_len = 0;
     bool wav_ok = SDL_LoadWAV(wav_path, &src_spec, &src_buf, &src_len);
     if (!wav_ok) { printf("Warning: SDL_LoadWAV failed: %s\n", SDL_GetError()); }
     else { printf("Loaded WAV: %s (freq=%d channels=%d bytes=%u format=%u)\n", wav_path, src_spec.freq, src_spec.channels, src_len, (unsigned)src_spec.format); }
@@ -232,118 +243,57 @@ int main(int, char**)
 
     // Enumerate playback devices
     std::vector<SDL_AudioDeviceID> dev_ids; std::vector<std::string> dev_names;
-    int dev_count=0; SDL_AudioDeviceID* list = SDL_GetAudioPlaybackDevices(&dev_count);
-    if (list && dev_count>0)
+    int dev_count = 0; SDL_AudioDeviceID* list = SDL_GetAudioPlaybackDevices(&dev_count);
+    if (list && dev_count > 0)
     {
-        for (int i=0;i<dev_count;++i){ dev_ids.push_back(list[i]); const char* n = SDL_GetAudioDeviceName(list[i]); dev_names.emplace_back(n?n:"(unknown)"); }
+        for (int i = 0; i < dev_count; ++i) { dev_ids.push_back(list[i]); const char* n = SDL_GetAudioDeviceName(list[i]); dev_names.emplace_back(n ? n : "(unknown)"); }
         SDL_free(list);
     }
     else { printf("No playback devices found.\n"); SDL_free(list); }
 
-    int current_dev_index = dev_ids.empty()? -1 : 0;
+    int current_dev_index = dev_ids.empty() ? -1 : 0;
     SDL_AudioStream* play_stream = nullptr; // device-backed stream
 
-    auto OpenPlayback = [&](int idx){
-        if (play_stream){ SDL_PauseAudioStreamDevice(play_stream); SDL_DestroyAudioStream(play_stream); play_stream=nullptr; }
-        if (idx<0 || idx>= (int)dev_ids.size()) return;
+    auto OpenPlayback = [&](int idx) {
+        if (play_stream) { SDL_PauseAudioStreamDevice(play_stream); SDL_DestroyAudioStream(play_stream); play_stream = nullptr; }
+        if (idx < 0 || idx >= (int)dev_ids.size()) return;
         // Open device stream with desired playback spec (vis_spec)
         play_stream = SDL_OpenAudioDeviceStream(dev_ids[idx], &vis_spec, nullptr, nullptr);
-        if (!play_stream){ printf("Failed to open device '%s': %s\n", dev_names[idx].c_str(), SDL_GetError()); return; }
+        if (!play_stream) { printf("Failed to open device '%s': %s\n", dev_names[idx].c_str(), SDL_GetError()); return; }
         SDL_ResumeAudioStreamDevice(play_stream);
         printf("Opened playback device %d: %s (freq=%d channels=%d)\n", idx, dev_names[idx].c_str(), vis_spec.freq, vis_spec.channels);
-    };
-    if (current_dev_index>=0) OpenPlayback(current_dev_index);
+        };
+    if (current_dev_index >= 0) OpenPlayback(current_dev_index);
 
     // Playback state
     bool audio_playing = false;
     size_t play_cursor = 0; // index in pcm
-    const float seconds_per_sample = (vis_spec.freq>0)? (1.0f/vis_spec.freq):0.0f;
+    const float seconds_per_sample = (vis_spec.freq > 0) ? (1.0f / vis_spec.freq) : 0.0f;
     float audio_time = 0.0f;
 
     // Visualization state
-    const int kFreqBins = 512; std::vector<float> freqAmps(kFreqBins,0.0f); std::vector<float> phase(kFreqBins);
-    { std::mt19937 rng{12345}; std::uniform_real_distribution<float> dist(0.f,6.28318f); for(int i=0;i<kFreqBins;++i) phase[i]=dist(rng);}    
+    const int kFreqBins = 512; std::vector<float> freqAmps(kFreqBins, 0.0f); std::vector<float> phase(kFreqBins);
+    { std::mt19937 rng{ 12345 }; std::uniform_real_distribution<float> dist(0.f, 6.28318f); for (int i = 0; i < kFreqBins; ++i) phase[i] = dist(rng); }
 
-    ImVec4 clear_color = ImVec4(0.05f,0.06f,0.10f,1.0f);
+    ImVec4 clear_color = ImVec4(0.05f, 0.06f, 0.10f, 1.0f);
     auto last_tp = std::chrono::high_resolution_clock::now();
 
-    bool show_visualizer = false; // hidden until player wins
-    bool done=false;
+    bool done = false;
     bool show_chess_board = true;
-    bool player_won = false;
-    const char* kStartFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-    static std::string last_best_move;
-    static std::vector<std::string> last_legal_moves;
-    static bool searching = false;
-    static bool search_done = false;
-    static int search_depth_requested = 6;
-    bool move_applied = false;
-    // Interactive play state
-    int ply_depth = 4; // default depth from user input
-    bool engineWhite = true; // engine always white per request
-    bool whiteToMove = true; // start position
-    int fullmoveNumber = 1;
-    std::string currentFEN = kStartFEN;
-    std::vector<std::string> fenHistory; fenHistory.push_back(currentFEN);
-    PendingMove pending; // selection
-    std::string last_engine_move;
+    NativeEngineAdapter engineAdapter;
+    controller::GameController game(engineAdapter);
+
+    int ply_depth = 4;
+    bool engineWhite = true;
+    PendingMove pending; // defined earlier
     std::string status_msg;
+    static std::vector<std::string> activityLog; static int lastLoggedHumanFullmove = -1; static int lastLoggedEngineFullmove = -1;
 
-    // Logging state
-    static std::vector<std::string> activityLog; static int lastLoggedHumanFullmove=-1; static int lastLoggedEngineFullmove=-1; static std::string pgn;
-
-    // Board representation
-    char boardSquares[64]; ParseBoard(kStartFEN, boardSquares);
-
-    // PGN / SAN helper (simplified as requested)
-    auto BuildSAN = [&](const std::string& uci){
-        if (uci.size() < 4) return std::string();
-        int from = AlgebraicToIndex(uci.c_str());
-        char piece = (from>=0)? boardSquares[from] : '.';
-        std::string san;
-        bool isPawn = (piece=='P' || piece=='p');
-        std::string toSq = uci.substr(2,2);
-        if (!isPawn){ san.push_back((char)toupper((unsigned char)piece)); san += toSq; }
-        else { san += toSq; if (uci.size()==5){ san.push_back((char)toupper((unsigned char)uci[4])); } }
-        return san;
-    };
-
-    auto ResetGame = [&](){ whiteToMove = true; fullmoveNumber = 1; currentFEN = kStartFEN; fenHistory.clear(); fenHistory.push_back(currentFEN); ParseBoard(kStartFEN, boardSquares); pending.from=-1; last_engine_move.clear(); status_msg="New game"; activityLog.clear(); pgn.clear(); lastLoggedHumanFullmove=-1; lastLoggedEngineFullmove=-1; };
-    auto PushFEN = [&](){ currentFEN = BuildFEN(boardSquares, whiteToMove, fullmoveNumber); fenHistory.push_back(currentFEN); };
-
-    auto ApplyUCIMove = [&](const std::string& uci){
-        // PGN update before boardSquares mutate
-        std::string san = BuildSAN(uci);
-        if (whiteToMove){ // white (engine) move
-            if (!san.empty()){ if (!pgn.empty()) pgn += ' '; pgn += std::to_string(fullmoveNumber) + '.' + san; }
-        } else { // black (human) move
-            if (!san.empty()){ if (!pgn.empty()) pgn += ' '; pgn += san; }
-        }
-        ApplyUCIMoveToBoardSquares(uci, boardSquares);
-        if(!whiteToMove) fullmoveNumber++; whiteToMove = !whiteToMove; PushFEN(); };
-
-    auto IsLegalMove = [&](int from, int to){
-        std::string uci_try = IndexToAlg(from) + IndexToAlg(to);
-        auto moves = engine::legal_moves_uci(currentFEN); // sideToMove governs list
-        for (auto &m : moves) {
-            if (m.rfind(uci_try, 0) == 0)
-                return m; // includes promotion or castle suffix automatically
-        }
-        return std::string();
-    };
-
-    ////////////////////////////////////////////////////////////////////////////////
-    // DEBUG TESTING CODE
-    // Listener for moves played in GUI
-    struct PendingMove { int from=-1; }; // selection state
-    std::string listen_for_move="e7e5"; // FEN e7e5
-    PendingMove pm;
-    while(!done)
+    while (!done)
     {
-        SDL_Event ev; while(SDL_PollEvent(&ev)){ ImGui_ImplSDL3_ProcessEvent(&ev); if(ev.type==SDL_EVENT_QUIT) done=true; if(ev.type==SDL_EVENT_WINDOW_CLOSE_REQUESTED && ev.window.windowID==SDL_GetWindowID(window)) done=true; }
-        if (SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED){ SDL_Delay(10); continue; }
-
-        auto now_tp = std::chrono::high_resolution_clock::now(); float frame_dt = std::chrono::duration<float>(now_tp - last_tp).count(); last_tp = now_tp;
+        SDL_Event ev; while (SDL_PollEvent(&ev)) { ImGui_ImplSDL3_ProcessEvent(&ev); if (ev.type == SDL_EVENT_QUIT) done = true; if (ev.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && ev.window.windowID == SDL_GetWindowID(window)) done = true; }
+        if (SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED) { SDL_Delay(10); continue; }
+        auto now_tp = std::chrono::high_resolution_clock::now(); float frame_dt = std::chrono::duration<float>(now_tp - last_tp).count(); last_tp = now_tp; ImGui::GetIO().DeltaTime = frame_dt;
 
         // Feed playback device
         if (audio_playing && play_stream && !pcm.empty())
@@ -359,7 +309,7 @@ int main(int, char**)
                     // Loop
                     play_cursor = 0; remaining = (int)(pcm.size()); printf("[Audio] Loop restart\n");
                 }
-                int send = (remaining < chunk_samples)? remaining : chunk_samples;
+                int send = (remaining < chunk_samples) ? remaining : chunk_samples;
                 SDL_PutAudioStreamData(play_stream, &pcm[play_cursor], send * sizeof(float));
                 play_cursor += send;
                 queued_bytes = SDL_GetAudioStreamQueued(play_stream);
@@ -373,15 +323,15 @@ int main(int, char**)
             // Sample a window of recent audio (approximate using play_cursor) for frequency energy.
             int window_samples = vis_spec.freq / 40; // 25ms snapshot
             int start = (int)play_cursor - window_samples; if (start < 0) start = 0;
-            for(int i=0;i<kFreqBins;++i)
+            for (int i = 0; i < kFreqBins; ++i)
             {
-                int idx = start + (i * window_samples)/kFreqBins;
-                if (idx >= (int)pcm.size()) idx = (int)pcm.size()-1;
+                int idx = start + (i * window_samples) / kFreqBins;
+                if (idx >= (int)pcm.size()) idx = (int)pcm.size() - 1;
                 float s = pcm[idx]; float env = fabsf(s);
-                freqAmps[i] = freqAmps[i]*0.88f + env*1.8f; // smooth
+                freqAmps[i] = freqAmps[i] * 0.88f + env * 1.8f; // smooth
             }
         }
-        else { for(float& v:freqAmps) v *= 0.92f; }
+        else { for (float& v : freqAmps) v *= 0.92f; }
 
         ImGui_ImplSDLGPU3_NewFrame(); ImGui_ImplSDL3_NewFrame(); ImGui::NewFrame();
 
@@ -390,239 +340,103 @@ int main(int, char**)
             ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, io.DisplaySize.y - 10), ImGuiCond_Always);
             if (ImGui::Begin("Chess Board", &show_chess_board, ImGuiWindowFlags_NoCollapse))
             {
-                // Top controls
                 ImGui::Text("Engine (White) vs Human (Black)");
-                ImGui::InputInt("Ply Depth", &ply_depth); if (ply_depth < 1) ply_depth = 1; if (ply_depth>10) ply_depth=10;
-                ImGui::SameLine(); if (ImGui::Button("New Game")) { ResetGame(); }
-                ImGui::SameLine(); if (ImGui::Button("Undo") && fenHistory.size()>1){ fenHistory.pop_back(); currentFEN = fenHistory.back(); ParseBoard(currentFEN.c_str(), boardSquares); whiteToMove = (currentFEN.find(" w ")!=std::string::npos); pending.from=-1; status_msg="Undo"; }
-                // User FEN input (editable load box separate from read-only current position display)
-                static char fenInput[256] = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"; // default
+                ImGui::InputInt("Ply Depth", &ply_depth); if (ply_depth < 1) ply_depth = 1; if (ply_depth > 10) ply_depth = 10;
+                ImGui::SameLine(); if (ImGui::Button("New Game")) { game.reset(); pending.from = -1; activityLog.clear(); lastLoggedHumanFullmove = lastLoggedEngineFullmove = -1; status_msg = "New game"; }
+                ImGui::SameLine(); if (ImGui::Button("Undo") && game.fen_history().size() > 1) { if (game.undo()) { pending.from = -1; status_msg = "Undo"; } }
+                static char fenInput[256]; std::strncpy(fenInput, game.current_fen().c_str(), sizeof(fenInput)); fenInput[sizeof(fenInput) - 1] = '\0';
                 ImGui::InputText("Load FEN", fenInput, sizeof(fenInput));
-                ImGui::SameLine();
-                if (ImGui::Button("Apply FEN"))
-                {
-                    std::string fenCandidate = fenInput;
-                    // Basic validation: split into tokens
-                    std::istringstream iss(fenCandidate);
-                    std::vector<std::string> tokens; std::string tk;
-                    while (iss >> tk) tokens.push_back(tk);
-                    bool ok = tokens.size() >= 2; // board + side
-                    if (ok)
-                    {
-                        // Parse board portion
-                        char testBoard[64];
-                        ParseBoard(fenCandidate.c_str(), testBoard);
-                        // Side to move
-                        bool sideWhite = (tokens[1] == "w");
-                        // Fullmove number (last token if numeric)
-                        int newFullmove = 1;
-                        if (!tokens.empty())
-                        {
-                            for (int i = (int)tokens.size()-1; i>=0; --i)
-                            {
-                                const std::string &last = tokens[i];
-                                bool digits = !last.empty() && std::all_of(last.begin(), last.end(), [](char c){ return std::isdigit((unsigned char)c); });
-                                if (digits) { newFullmove = std::atoi(last.c_str()); break; }
-                            }
-                        }
-                        // Accept position
-                        std::memcpy(boardSquares, testBoard, 64);
-                        currentFEN = fenCandidate;
-                        whiteToMove = sideWhite;
-                        fullmoveNumber = newFullmove;
-                        // Reset histories/logs
-                        fenHistory.clear(); fenHistory.push_back(currentFEN);
-                        activityLog.clear(); pgn.clear(); pending.from = -1; last_engine_move.clear();
-                        lastLoggedHumanFullmove = -1; lastLoggedEngineFullmove = -1;
-                        status_msg = std::string("Loaded FEN (") + (whiteToMove?"white":"black") + " to move)";
-                    }
-                    else
-                    {
-                        status_msg = "Invalid FEN format";
-                    }
-                }
+                ImGui::SameLine(); if (ImGui::Button("Apply FEN")) { if (!game.load_fen(fenInput)) status_msg = "Invalid FEN format"; else { pending.from = -1; activityLog.clear(); lastLoggedHumanFullmove = lastLoggedEngineFullmove = -1; status_msg = std::string("Loaded FEN (") + (game.white_to_move() ? "white" : "black") + " to move)"; } }
                 ImGui::Separator();
-                // FEN display
-                {
-                    char fenBuf[128]; std::strncpy(fenBuf, currentFEN.c_str(), sizeof(fenBuf)); fenBuf[sizeof(fenBuf)-1]='\0';
-                    ImGui::InputText("##fen", fenBuf, sizeof(fenBuf), ImGuiInputTextFlags_ReadOnly);
-                }
+                { char fenBuf[128]; std::strncpy(fenBuf, game.current_fen().c_str(), sizeof(fenBuf)); fenBuf[sizeof(fenBuf) - 1] = '\0'; ImGui::InputText("##fen", fenBuf, sizeof(fenBuf), ImGuiInputTextFlags_ReadOnly); }
                 if (!status_msg.empty()) ImGui::TextWrapped("%s", status_msg.c_str());
-                if (searching) ImGui::TextColored(ImVec4(1,1,0,1), "Searching...");
-
-                // Engine auto-move & logging
-                if (engineWhite && whiteToMove && !searching)
-                {
-                    if (lastLoggedEngineFullmove != fullmoveNumber)
-                    {
-                        auto movesList = engine::legal_moves_uci(currentFEN);
-                        std::unordered_map<std::string, int> moveEval;
-                        int bestEval = -100000;
-                        std::string line = std::string("Turn ") + std::to_string(fullmoveNumber) + " White legal:";
-                        // Static 1-ply evaluations
-                        for (const auto& mv : movesList)
-                        {
-                            char tmpBoard[64];
-                            std::memcpy(tmpBoard, boardSquares, 64);
-                            ApplyUCIMoveToBoardSquares(mv, tmpBoard);
-                            bool nxtWhite = false;              // after white move, black to move
-                            int nxtFullmove = fullmoveNumber;   // increment only after black moves
-                            std::string fenEval = BuildFEN(tmpBoard, nxtWhite, nxtFullmove);
-                            engine::Position ep;
-                            int score = 0;
-                            if (engine::parse_fen(fenEval, ep))
-                                score = engine::evaluate(ep);
-                            moveEval[mv] = score;
-                            if (score > bestEval)
-                                bestEval = score;
-                            line += ' ' + mv + '(' + (score >= 0 ? '+' : '-') + std::to_string(std::abs(score)) + ')';
-                        }
-                        activityLog.push_back(line);
-                        lastLoggedEngineFullmove = fullmoveNumber;
-
-                        // Search for best move using chosen depth
-                        searching = true;
-                        status_msg = "Engine thinking...";
-                        std::string chosen = engine::choose_move(currentFEN, ply_depth);
-                        searching = false;
-
-                        if (!chosen.empty())
-                        {
-                            auto it = moveEval.find(chosen);
-                            int chosenEval = (it != moveEval.end()) ? it->second : -100000;
-                            if (it == moveEval.end() || chosenEval < bestEval)
-                            {
-                                status_msg = "Engine Failure, did not choose best move";
-                                activityLog.push_back("ENGINE FAILURE: chose " + chosen +
-                                    " eval=" + std::to_string(chosenEval) +
-                                    " best=" + std::to_string(bestEval));
-                                ApplyUCIMove(chosen); // still apply move
-                            }
-                            else
-                            {
-                                ApplyUCIMove(chosen);
-                                status_msg = std::string("Engine moves ") + chosen;
-                            }
-                        }
-                        else
-                        {
-                            status_msg = "Engine has no move";
-                        }
+                // Engine move & logging
+                if (engineWhite && game.white_to_move()) {
+                    if (lastLoggedEngineFullmove != game.fullmove_number()) {
+                        auto movesList = game.legal_moves(); std::string line = std::string("Turn ") + std::to_string(game.fullmove_number()) + " White legal:";
+                        if (ply_depth % 2 == 0) { auto scored = engine::root_search_scores(game.current_fen(), ply_depth); std::unordered_map<std::string, int> sm; for (auto& pr : scored) sm[pr.first.substr(0, 4)] = pr.second; for (auto& mv : movesList) { auto key = mv.substr(0, 4); auto it = sm.find(key); if (it != sm.end()) line += ' ' + mv + '(' + std::to_string(it->second) + ')'; else line += ' ' + mv; } }
+                        else { for (auto& mv : movesList) line += ' ' + mv; }
+                        activityLog.push_back(line); lastLoggedEngineFullmove = game.fullmove_number(); std::string chosen = game.engine_move(ply_depth); status_msg = chosen.empty() ? "Engine has no move" : std::string("Engine moves ") + chosen;
                     }
                 }
-                // Board sizing
-                float availW = ImGui::GetContentRegionAvail().x;
-                float availH = ImGui::GetContentRegionAvail().y;
-                float squareSize = floorf((availH * 0.9f)/8.0f); if (squareSize < 36.0f) squareSize = 36.0f; if (squareSize > 96.0f) squareSize = 96.0f;
-                float boardPixel = squareSize * 8.0f;
-                float spacing = 8.0f;
-                float sideW = availW - boardPixel - spacing; if (sideW < 260.0f) sideW = 260.0f; if (boardPixel + spacing + sideW > availW){ sideW = availW - boardPixel - spacing; if (sideW < 200.0f) sideW = 200.0f; }
-                float boardHeight = squareSize * 8.0f;
+                // Board layout sizing
+                float availW = ImGui::GetContentRegionAvail().x; float availH = ImGui::GetContentRegionAvail().y; float squareSize = floorf((availH * 0.9f) / 8.0f); if (squareSize < 36) squareSize = 36; if (squareSize > 96) squareSize = 96; float boardPixel = squareSize * 8.0f; float spacing = 8.0f; float sideW = availW - boardPixel - spacing; if (sideW < 260) sideW = 260; if (boardPixel + spacing + sideW > availW) { sideW = availW - boardPixel - spacing; if (sideW < 200) sideW = 200; } float boardHeight = squareSize * 8.0f;
 
-                // Draw board (group)
-                ImGui::BeginGroup();
-                ImDrawList* dlBoard = ImGui::GetWindowDrawList(); ImVec2 boardPos = ImGui::GetCursorScreenPos();
-                // Mouse handling for human (black)
-                ImVec2 mouse = ImGui::GetIO().MousePos; bool mouseClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left); int hoverSq=-1;
-                if (mouse.x >= boardPos.x && mouse.y >= boardPos.y && mouse.x < boardPos.x + boardPixel && mouse.y < boardPos.y + boardHeight){ int file = int((mouse.x - boardPos.x)/squareSize); int rInv = int((mouse.y - boardPos.y)/squareSize); int rank = 7 - rInv; hoverSq = rank*8 + file; }
-                if (!whiteToMove && mouseClicked && hoverSq>=0){ char pc = boardSquares[hoverSq]; if (pending.from<0){ if (pc>='a' && pc<='z'){ pending.from = hoverSq; status_msg = std::string("Selected ")+IndexToAlg(pending.from); } } else { if (pc>='a' && pc<='z'){ pending.from = hoverSq; status_msg = std::string("Reselect ")+IndexToAlg(pending.from); } else { std::string legal = IsLegalMove(pending.from, hoverSq); if (!legal.empty()){ ApplyUCIMove(legal); pending.from=-1; status_msg = std::string("Human moves ")+legal; } else { status_msg = "Illegal move"; pending.from=-1; } } } }
-                // Log black legal moves at start of black turn
-                if (!whiteToMove && lastLoggedHumanFullmove != fullmoveNumber){
-                    auto movesList = engine::legal_moves_uci(currentFEN);
-                    std::string line = std::string("Turn ") + std::to_string(fullmoveNumber) + " Black legal:";
-                    for (auto &mv : movesList){
-                        // Static 1-ply eval for logging (optional)
-                        engine::Position tmpPos;
-                        if (engine::parse_fen(currentFEN, tmpPos)){
-                            engine::Position after = tmpPos;
-                            // Quick apply using existing helper
-                            ApplyUCIMoveToBoardSquares(mv, boardSquares); // temporarily mutate
-                            char snapshot[64]; std::memcpy(snapshot, boardSquares, 64);
-                            ParseBoard(currentFEN.c_str(), boardSquares); // restore boardSquares from FEN to avoid drift
-                        }
-                        line += ' ' + mv;
-                    }
-                    activityLog.push_back(line);
-                    lastLoggedHumanFullmove = fullmoveNumber;
-                }
-                // Coordinates labels
-                for (int r=7; r>=0; --r){ char label[2]={(char)('1'+r),0}; ImVec2 p(boardPos.x - 16.0f, boardPos.y + (7-r)*squareSize + squareSize*0.4f); dlBoard->AddText(p, IM_COL32(200,200,200,255), label);}            
-                for (int f=0; f<8; ++f){ char label[2]={(char)('a'+f),0}; ImVec2 p(boardPos.x + f*squareSize + squareSize*0.45f, boardPos.y + boardHeight + 4.0f); dlBoard->AddText(p, IM_COL32(200,200,200,255), label);}            
-                // Squares & pieces
-                for (int rank=7; rank>=0; --rank){
-                    for (int file=0; file<8; ++file){
-                        int idx=rank*8+file; bool light=((rank+file)&1)==0; ImU32 col= light?IM_COL32(235,235,235,255):IM_COL32(90,90,110,255);
-                        ImVec2 p0(boardPos.x + file*squareSize, boardPos.y + (7-rank)*squareSize);
-                        ImVec2 p1(p0.x+squareSize,p0.y+squareSize);
-                        dlBoard->AddRectFilled(p0,p1,col);
-                        if (idx==pending.from) dlBoard->AddRect(p0,p1,IM_COL32(255,215,0,255),3.0f); else dlBoard->AddRect(p0,p1,IM_COL32(0,0,0,80));
-                        char pc = boardSquares[idx];
-                        if (pc!='.'){
-                            std::string key = PieceKey(pc);
-                            auto it = piece_textures.find(key);
-                            if (it != piece_textures.end() && it->second.tex){
+                ImGui::BeginGroup(); ImDrawList* dlBoard = ImGui::GetWindowDrawList(); ImVec2 boardPos = ImGui::GetCursorScreenPos();
+                // Mouse input
+                ImVec2 mouse = ImGui::GetIO().MousePos; bool mouseClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left); int hoverSq = -1; if (mouse.x >= boardPos.x && mouse.y >= boardPos.y && mouse.x < boardPos.x + boardPixel && mouse.y < boardPos.y + boardHeight) { int file = int((mouse.x - boardPos.x) / squareSize); int rInv = int((mouse.y - boardPos.y) / squareSize); int rank = 7 - rInv; hoverSq = rank * 8 + file; }
+                if (!game.white_to_move() && mouseClicked && hoverSq >= 0) { char pc = game.piece_at(hoverSq); if (pending.from < 0) { if (pc >= 'a' && pc <= 'z') { pending.from = hoverSq; status_msg = std::string("Selected ") + IndexToAlg(pending.from); } } else { if (pc >= 'a' && pc <= 'z') { pending.from = hoverSq; status_msg = std::string("Reselect ") + IndexToAlg(pending.from); } else { std::string tryUci = IndexToAlg(pending.from) + IndexToAlg(hoverSq); auto moves = game.legal_moves(); std::string legal; for (auto& m : moves) { if (m.rfind(tryUci, 0) == 0) { legal = m; break; } } if (!legal.empty()) { game.apply_human_move(legal); pending.from = -1; status_msg = std::string("Human moves ") + legal; } else { status_msg = "Illegal move"; pending.from = -1; } } } }
+                if (!game.white_to_move() && lastLoggedHumanFullmove != game.fullmove_number()) { auto movesList = game.legal_moves(); std::string line = std::string("Turn ") + std::to_string(game.fullmove_number()) + " Black legal:"; if (ply_depth % 2 == 0) { auto scored = engine::root_search_scores(game.current_fen(), ply_depth); std::unordered_map<std::string, int> sm; for (auto& pr : scored) sm[pr.first.substr(0, 4)] = pr.second; for (auto& mv : movesList) { auto key = mv.substr(0, 4); auto it = sm.find(key); if (it != sm.end()) line += ' ' + mv + '(' + std::to_string(it->second) + ')'; else line += ' ' + mv; } } else { for (auto& mv : movesList) line += ' ' + mv; } activityLog.push_back(line); lastLoggedHumanFullmove = game.fullmove_number(); }
+                const char* boardPtr = game.board();
+                // Draw squares & pieces
+                for (int rank = 7; rank >= 0; --rank) {
+                    for (int file = 0; file < 8; ++file) {
+                        int idx = rank * 8 + file; bool light = ((rank + file) & 1) == 0; ImU32 col = light ? IM_COL32(235, 235, 235, 255) : IM_COL32(90, 90, 110, 255);
+                        ImVec2 p0(boardPos.x + file * squareSize, boardPos.y + (7 - rank) * squareSize);
+                        ImVec2 p1(p0.x + squareSize, p0.y + squareSize);
+                        dlBoard->AddRectFilled(p0, p1, col);
+                        if (idx == pending.from) dlBoard->AddRect(p0, p1, IM_COL32(255, 215, 0, 255), 3.0f); else dlBoard->AddRect(p0, p1, IM_COL32(0, 0, 0, 80));
+                        char pc = boardPtr[idx];
+                        if (pc != '.') {
+                            std::string key = PieceKey(pc); auto it = piece_textures.find(key);
+                            if (it != piece_textures.end() && it->second.tex) {
                                 ImTextureID tex_id = (ImTextureID)it->second.tex;
-                                dlBoard->AddImage(tex_id, p0, p1, ImVec2(0,0), ImVec2(1,1), IM_COL32(255,255,255,255));
+                                dlBoard->AddImage(tex_id, p0, p1, ImVec2(0, 0), ImVec2(1, 1), IM_COL32(255, 255, 255, 255));
                             } else {
-                                char buf[2]={pc,0}; ImVec2 ts=ImGui::CalcTextSize(buf); ImVec2 c((p0.x+p1.x)*0.5f,(p0.y+p1.y)*0.5f); ImVec2 pos(c.x-ts.x*0.5f,c.y-ts.y*0.5f); ImU32 tint=(pc>='A'&&pc<='Z')? IM_COL32(255,255,255,255):IM_COL32(30,30,30,255); dlBoard->AddText(ImVec2(pos.x+1,pos.y+1),IM_COL32(0,0,0,120),buf); dlBoard->AddText(pos,tint,buf);
+                                char buf[2] = { pc,0 }; ImVec2 ts = ImGui::CalcTextSize(buf); ImVec2 c((p0.x + p1.x) * 0.5f, (p0.y + p1.y) * 0.5f); ImVec2 pos(c.x - ts.x * 0.5f, c.y - ts.y * 0.5f);
+                                ImU32 tint = (pc >= 'A' && pc <= 'Z') ? IM_COL32(255, 255, 255, 255) : IM_COL32(30, 30, 30, 255);
+                                dlBoard->AddText(ImVec2(pos.x + 1, pos.y + 1), IM_COL32(0, 0, 0, 120), buf);
+                                dlBoard->AddText(pos, tint, buf);
                             }
                         }
                     }
                 }
-                ImGui::Dummy(ImVec2(boardPixel, boardHeight+8.0f));
-                ImGui::EndGroup();
+                ImGui::Dummy(ImVec2(boardPixel, boardHeight + 8.0f));
+                ImGui::EndGroup(); // end board group
 
-                // Side panel (PGN + Activity Log)
+                // Side panel (single implementation)
                 ImGui::SameLine();
                 ImGui::BeginGroup();
                 ImGui::PushItemWidth(sideW);
                 ImGui::Text("PGN");
-                static char pgnBuf[4096]; if (pgn.size() >= sizeof(pgnBuf)) pgn.resize(sizeof(pgnBuf)-1); std::strncpy(pgnBuf, pgn.c_str(), sizeof(pgnBuf)); pgnBuf[sizeof(pgnBuf)-1]='\0';
-                ImGui::InputTextMultiline("##pgn", pgnBuf, sizeof(pgnBuf), ImVec2(sideW, 100), ImGuiInputTextFlags_ReadOnly);
+                static std::vector<char> pgnBufVec; {
+                    std::string pgn = game.pgn(); if (pgn.size() > 4000) pgn.resize(4000);
+                    pgnBufVec.assign(pgn.begin(), pgn.end()); pgnBufVec.push_back('\0');
+                    ImGui::InputTextMultiline("##pgn", pgnBufVec.data(), pgnBufVec.size(), ImVec2(sideW, 100), ImGuiInputTextFlags_ReadOnly);
+                }
                 ImGui::Separator();
                 ImGui::Text("Activity Log");
-                float logHeight = boardHeight - 120.0f; if (logHeight < 120.0f) logHeight = 120.0f; if (logHeight > boardHeight) logHeight = boardHeight;
-                // Build combined log string
-                std::string logCombined; size_t totalLen=0; for(auto &l: activityLog) totalLen += l.size()+1; logCombined.reserve(totalLen); for(auto &l: activityLog){ logCombined += l; logCombined += '\n'; }
-                if (logCombined.empty()) logCombined = "(no entries)\n";
-                static std::string logCached; logCached = logCombined; // keep persistent backing
-                ImGui::InputTextMultiline("##activity", (char*)logCached.c_str(), logCached.size()+1, ImVec2(sideW, logHeight), ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_AutoSelectAll);
+                float logHeight = boardHeight - 120.0f; if (logHeight < 120) logHeight = 120; if (logHeight > boardHeight) logHeight = boardHeight;
+                static std::vector<char> logBuf; {
+                    size_t totalLen = 0; for (auto &l : activityLog) totalLen += l.size() + 1; std::string combined; combined.reserve(totalLen + 1);
+                    for (auto &l : activityLog) { combined += l; combined += '\n'; }
+                    if (combined.empty()) combined = "(no entries)\n";
+                    logBuf.assign(combined.begin(), combined.end()); logBuf.push_back('\0');
+                    ImGui::InputTextMultiline("##activity", logBuf.data(), logBuf.size(), ImVec2(sideW, logHeight), ImGuiInputTextFlags_ReadOnly);
+                }
+                ImGui::Separator();
+                ImGui::Text("Frame dt: %.3f ms (%.1f FPS)", frame_dt * 1000.0f, frame_dt > 0 ? 1.0f / frame_dt : 0.0f);
                 ImGui::PopItemWidth();
-                ImGui::EndGroup();
+                ImGui::EndGroup(); // end side panel
+                ImGui::End(); // end window
             }
-
-            ImGui::End();
         }
-
-        // Rendering (restore original GPU pass)
         ImGui::Render();
-        // Failure overlay
-        if(status_msg.find("Engine Failure")!=std::string::npos){
-            ImGui::SetNextWindowBgAlpha(0.25f);
-            ImGui::Begin("##engine_failure_overlay", nullptr, ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoInputs|ImGuiWindowFlags_AlwaysAutoResize);
-            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255,50,50,255));
-            ImGui::SetWindowFontScale(3.0f);
-            ImGui::Text("ENGINE FAILURE, DID NOT CHOOSE BEST MOVE");
-            ImGui::PopStyleColor();
-            ImGui::End();
-        }
-        ImDrawData* draw_data = ImGui::GetDrawData();
-        bool minimized = (draw_data->DisplaySize.x <= 0 || draw_data->DisplaySize.y <= 0);
+        ImDrawData* draw_data = ImGui::GetDrawData(); bool minimized = (draw_data->DisplaySize.x <= 0 || draw_data->DisplaySize.y <= 0);
         SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(gpu_device);
         SDL_GPUTexture* swap_tex; SDL_WaitAndAcquireGPUSwapchainTexture(cmd, window, &swap_tex, nullptr, nullptr);
-        if (swap_tex && !minimized)
-        {
+        if (swap_tex && !minimized) {
             ImGui_ImplSDLGPU3_PrepareDrawData(draw_data, cmd);
-            SDL_GPUColorTargetInfo target = {}; target.texture = swap_tex; target.clear_color = SDL_FColor{clear_color.x,clear_color.y,clear_color.w}; target.load_op = SDL_GPU_LOADOP_CLEAR; target.store_op = SDL_GPU_STOREOP_STORE;
+            SDL_GPUColorTargetInfo target = {}; target.texture = swap_tex; target.clear_color = SDL_FColor{ clear_color.x, clear_color.y, clear_color.w }; target.load_op = SDL_GPU_LOADOP_CLEAR; target.store_op = SDL_GPU_STOREOP_STORE;
             SDL_GPURenderPass* rp = SDL_BeginGPURenderPass(cmd, &target, 1, nullptr);
             ImGui_ImplSDLGPU3_RenderDrawData(draw_data, cmd, rp);
             SDL_EndGPURenderPass(rp);
         }
         SDL_SubmitGPUCommandBuffer(cmd);
     }
-
     SDL_WaitForGPUIdle(gpu_device);
-    if(play_stream){ SDL_PauseAudioStreamDevice(play_stream); SDL_DestroyAudioStream(play_stream);} if(src_buf) SDL_free(src_buf);
+    if (play_stream) { SDL_PauseAudioStreamDevice(play_stream); SDL_DestroyAudioStream(play_stream); }
+    if (src_buf) SDL_free(src_buf);
     for (auto &kv : piece_textures) if (kv.second.tex) SDL_ReleaseGPUTexture(gpu_device, kv.second.tex);
     ImGui_ImplSDL3_Shutdown(); ImGui_ImplSDLGPU3_Shutdown(); ImGui::DestroyContext();
     SDL_ReleaseWindowFromGPUDevice(gpu_device, window); SDL_DestroyGPUDevice(gpu_device); SDL_DestroyWindow(window); SDL_Quit();
