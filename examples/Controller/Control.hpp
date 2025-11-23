@@ -9,11 +9,14 @@ struct IChessEngine {
     virtual ~IChessEngine() = default;
     virtual std::vector<std::string> legal_moves(const std::string& fen) = 0;
     virtual std::string choose_move(const std::string& fen, int depth) = 0;
+    virtual std::vector<std::pair<std::string,int>> root_search_scores(const std::string& fen, int depth) { return {}; }
+    virtual std::string apply_move(const std::string& fen, const std::string& uci) { return {}; }
 };
 
 class GameController {
 public:
     explicit GameController(IChessEngine& engine);
+    void set_engine(IChessEngine& engine); // allow engine swap mid game
     void reset();
     bool load_fen(const std::string& fen); // returns false if parse failed
     bool undo(); // revert to previous position if available
@@ -33,7 +36,7 @@ public:
     char piece_at(int sq) const { return (sq>=0 && sq<64)? boardSquares[sq] : '.'; }
 
 private:
-    IChessEngine& eng;
+    IChessEngine* eng; // pointer to allow swapping
     char boardSquares[64];
     bool whiteToMove = true;
     int fullmoveNumber = 1;

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -135,7 +135,9 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="engine.hpp" />
+    <ClInclude Include="ChessEngine2.hpp" />
+    <ClInclude Include="ChessEngine1.hpp" />
+    <ClInclude Include="EngineBase.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="nnue.hpp" />
     <ClInclude Include="pch.h" />
@@ -144,8 +146,9 @@
     <None Include="chessnative2.vcxproj.md" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="engine.cpp" />
-    <ClCompile Include="engine2.cpp" />
+    <ClCompile Include="ChessEngine1.cpp" />
+    <ClCompile Include="ChessEngine2.cpp" />
+    <ClCompile Include="EngineBase.cpp" />
     <ClCompile Include="nnue.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

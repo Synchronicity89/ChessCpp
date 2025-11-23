@@ -18,8 +18,12 @@ static void parse_board_portion(const std::string& fen, char out[64]){
     }
 }
 
-GameController::GameController(IChessEngine& engine) : eng(engine){
+GameController::GameController(IChessEngine& engine) : eng(&engine){
     reset();
+}
+
+void GameController::set_engine(IChessEngine& engine){
+    eng = &engine; // keep current position, no reset
 }
 
 void GameController::reset(){
@@ -56,11 +60,11 @@ bool GameController::undo(){
     return load_fen(prev);
 }
 
-std::vector<std::string> GameController::legal_moves(){ return eng.legal_moves(currentFEN); }
+std::vector<std::string> GameController::legal_moves(){ return eng? eng->legal_moves(currentFEN): std::vector<std::string>(); }
 
 std::string GameController::engine_move(int depth){
-    if(!whiteToMove) return std::string(); // engine only plays white per current design
-    std::string mv = eng.choose_move(currentFEN, depth);
+    if(!whiteToMove || !eng) return std::string(); // engine only plays white per current design
+    std::string mv = eng->choose_move(currentFEN, depth);
     if(!mv.empty()){
         std::string san = build_san(mv);
         if(!san.empty()){ if(!pgnString.empty()) pgnString += ' '; pgnString += std::to_string(fullmoveNumber) + '.' + san; }
@@ -73,9 +77,9 @@ std::string GameController::engine_move(int depth){
 }
 
 bool GameController::apply_human_move(const std::string& uci){
-    if(whiteToMove) return false; // human is black
+    if(whiteToMove || !eng) return false; // human is black
     // Validate move is in legal list
-    auto moves = eng.legal_moves(currentFEN);
+    auto moves = eng->legal_moves(currentFEN);
     std::string found;
     for(auto &m: moves){ if(m.rfind(uci,0)==0){ found=m; break; } }
     if(found.empty()) return false;

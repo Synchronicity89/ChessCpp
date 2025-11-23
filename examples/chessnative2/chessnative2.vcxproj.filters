@@ -21,10 +21,16 @@
     <ClInclude Include="pch.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="engine.hpp">
+    <ClInclude Include="ChessEngine1.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="nnue.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="EngineBase.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ChessEngine2.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -32,13 +38,16 @@
     <None Include="chessnative2.vcxproj.md" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="engine.cpp">
+    <ClCompile Include="ChessEngine1.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="nnue.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="engine2.cpp">
+    <ClCompile Include="ChessEngine2.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="EngineBase.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

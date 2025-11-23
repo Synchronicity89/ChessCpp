@@ -1,8 +1,7 @@
 #include "nnue.hpp"
 
 namespace engine {
-int nnue_eval(const Position& /*pos*/) {
-    // Placeholder; integrate real accumulation network later.
+int nnue_eval(const ChessEngine1::Position& /*pos*/) {
     return 0;
 }
 } // namespace engine
