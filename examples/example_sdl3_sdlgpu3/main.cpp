@@ -33,18 +33,8 @@
 #include "../Controller/Control.hpp"
 
 namespace {
-    struct Adapter1 : controller::IChessEngine {
-        engine::ChessEngine1 e;
-        std::vector<std::string> legal_moves(const std::string& fen) override { return e.legal_moves_uci(fen); }
-        std::string choose_move(const std::string& fen, int depth) override { return e.choose_move(fen, depth); }
-        std::vector<std::pair<std::string,int>> root_search_scores(const std::string& fen, int depth) override { return e.root_search_scores(fen, depth); }
-    };
-    struct Adapter2 : controller::IChessEngine {
-        engine::ChessEngine2 e2;
-        std::vector<std::string> legal_moves(const std::string& fen) override { return e2.legal_moves_uci(fen); }
-        std::string choose_move(const std::string& fen, int depth) override { return e2.choose_move(fen, depth); }
-        std::vector<std::pair<std::string,int>> root_search_scores(const std::string& fen, int depth) override { return e2.root_search_scores(fen, depth); }
-    };
+    engine::ChessEngine1 engine1;
+    engine::ChessEngine2 engine2;
 }
 
 // #ifdef _DEBUG
@@ -292,8 +282,7 @@ int main(int, char**)
     bool show_chess_board = true;
 
     // Engine selection state
-    Adapter1 adapter1; Adapter2 adapter2; int selectedEngine = 2; controller::IChessEngine* activeAdapter = &adapter2;
-    controller::GameController game(*activeAdapter);
+    int selectedEngine = 1; engine::EngineBase* activeEngine = &engine2; controller::GameController game(*activeEngine);
 
     int ply_depth = 4;
     bool engineWhite = true;
@@ -356,10 +345,8 @@ int main(int, char**)
                 // Engine dropdown and depth control
                 const char* engineNames[] = { "Engine1", "Engine2" };
                 ImGui::Combo("Engine", &selectedEngine, engineNames, IM_ARRAYSIZE(engineNames));
-                if((selectedEngine==0 && activeAdapter!=&adapter1) || (selectedEngine==1 && activeAdapter!=&adapter2)){
-                    activeAdapter = (selectedEngine==0)? (controller::IChessEngine*)&adapter1 : (controller::IChessEngine*)&adapter2;
-                    game.set_engine(*activeAdapter); // keep current position
-                }
+                engine::EngineBase* desired = (selectedEngine==0)? static_cast<engine::EngineBase*>(&engine1) : static_cast<engine::EngineBase*>(&engine2);
+                if(desired != activeEngine){ activeEngine = desired; game.set_engine(*activeEngine); }
                 ImGui::InputInt("Ply Depth", &ply_depth); if (ply_depth < 1) ply_depth = 1; if (ply_depth > 10) ply_depth = 10;
                 ImGui::SameLine(); if (ImGui::Button("New Game")) { game.reset(); pending.from = -1; activityLog.clear(); lastLoggedHumanFullmove = lastLoggedEngineFullmove = -1; status_msg = "New game"; }
                 ImGui::SameLine(); if (ImGui::Button("Undo") && game.fen_history().size() > 1) { if (game.undo()) { pending.from = -1; status_msg = "Undo"; } }
@@ -372,8 +359,8 @@ int main(int, char**)
                 // Engine move & logging
                 if (engineWhite && game.white_to_move()) {
                     if (lastLoggedEngineFullmove != game.fullmove_number()) {
-                        auto movesList = game.legal_moves(); std::string line = std::string("Turn ") + std::to_string(game.fullmove_number()) + " White legal:";
-                        if (ply_depth % 2 == 0) { auto scored = activeAdapter->root_search_scores(game.current_fen(), ply_depth); std::unordered_map<std::string, int> sm; for (auto& pr : scored) sm[pr.first.substr(0, 4)] = pr.second; for (auto& mv : movesList) { auto key = mv.substr(0, 4); auto it = sm.find(key); if (it != sm.end()) line += ' ' + mv + '(' + std::to_string(it->second) + ')'; else line += ' ' + mv; } }
+                        auto movesList = game.legal_moves_uci(); std::string line = std::string("Turn ") + std::to_string(game.fullmove_number()) + " White legal:";
+                        if (ply_depth % 2 == 0) { auto scored = activeEngine->root_search_scores(game.current_fen(), ply_depth); std::unordered_map<std::string, int> sm; for (auto &pr : scored) sm[pr.first.substr(0,4)] = pr.second; for (auto &mv : movesList){ auto key= mv.substr(0,4); auto it= sm.find(key); if(it!=sm.end()) line += ' ' + mv + '(' + std::to_string(it->second) + ')'; else line += ' ' + mv; } }
                         else { for (auto& mv : movesList) line += ' ' + mv; }
                         activityLog.push_back(line); lastLoggedEngineFullmove = game.fullmove_number(); std::string chosen = game.engine_move(ply_depth); status_msg = chosen.empty() ? "Engine has no move" : std::string("Engine moves ") + chosen;
                     }
@@ -385,7 +372,11 @@ int main(int, char**)
                 // Mouse input
                 ImVec2 mouse = ImGui::GetIO().MousePos; bool mouseClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left); int hoverSq = -1; if (mouse.x >= boardPos.x && mouse.y >= boardPos.y && mouse.x < boardPos.x + boardPixel && mouse.y < boardPos.y + boardHeight) { int file = int((mouse.x - boardPos.x) / squareSize); int rInv = int((mouse.y - boardPos.y) / squareSize); int rank = 7 - rInv; hoverSq = rank * 8 + file; }
                 if (!game.white_to_move() && mouseClicked && hoverSq >= 0) { char pc = game.piece_at(hoverSq); if (pending.from < 0) { if (pc >= 'a' && pc <= 'z') { pending.from = hoverSq; status_msg = std::string("Selected ") + IndexToAlg(pending.from); } } else { if (pc >= 'a' && pc <= 'z') { pending.from = hoverSq; status_msg = std::string("Reselect ") + IndexToAlg(pending.from); } else { std::string tryUci = IndexToAlg(pending.from) + IndexToAlg(hoverSq); auto moves = game.legal_moves(); std::string legal; for (auto& m : moves) { if (m.rfind(tryUci, 0) == 0) { legal = m; break; } } if (!legal.empty()) { game.apply_human_move(legal); pending.from = -1; status_msg = std::string("Human moves ") + legal; } else { status_msg = "Illegal move"; pending.from = -1; } } } }
-                if (!game.white_to_move() && lastLoggedHumanFullmove != game.fullmove_number()) { auto movesList = game.legal_moves(); std::string line = std::string("Turn ") + std::to_string(game.fullmove_number()) + " Black legal:"; if (ply_depth % 2 == 0) { auto scored = activeAdapter->root_search_scores(game.current_fen(), ply_depth); std::unordered_map<std::string, int> sm; for (auto& pr : scored) sm[pr.first.substr(0, 4)] = pr.second; for (auto& mv : movesList) { auto key = mv.substr(0, 4); auto it = sm.find(key); if (it != sm.end()) line += ' ' + mv + '(' + std::to_string(it->second) + ')'; else line += ' ' + mv; } } else { for (auto& mv : movesList) line += ' ' + mv; } activityLog.push_back(line); lastLoggedHumanFullmove = game.fullmove_number(); }
+                if (!game.white_to_move() && lastLoggedHumanFullmove != game.fullmove_number()) {
+                    auto movesList = game.legal_moves_uci(); std::string line = std::string("Turn ") + std::to_string(game.fullmove_number()) + " Black legal:";
+                    if (ply_depth % 2 == 0) { auto scored = activeEngine->root_search_scores(game.current_fen(), ply_depth); std::unordered_map<std::string,int> sm; for(auto &pr : scored) sm[pr.first.substr(0,4)] = pr.second; for(auto &mv : movesList){ auto key= mv.substr(0,4); auto it= sm.find(key); if(it!=sm.end()) line += ' ' + mv + '(' + std::to_string(it->second) + ')'; else line += ' ' + mv; } }
+                    else { for (auto& mv : movesList) line += ' ' + mv; }
+                    activityLog.push_back(line); lastLoggedHumanFullmove = game.fullmove_number(); }
                 const char* boardPtr = game.board();
                 // Draw squares & pieces
                 for (int rank = 7; rank >= 0; --rank) {

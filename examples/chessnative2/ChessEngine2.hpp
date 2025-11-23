@@ -8,6 +8,7 @@ namespace engine
 {
     class ChessEngine2 : public EngineBase {
     public:
+        using EngineBase::loadFEN; // expose base implementation
         uint64_t pieces[12];
         int side_to_move = 0;
         int white_kingside_rook_file = -1;
@@ -22,14 +23,14 @@ namespace engine
         ChessEngine2() = default;
         ChessEngine2(const std::function<int(int, char)>& cb) : kingDestCallback(cb) {}
 
-        void loadFEN(const std::string& fen);
-
         std::string choose_move(const std::string& fen, int depth) override;
         std::vector<std::pair<std::string, int>> root_search_scores(const std::string& fen, int depth) override;
         std::vector<std::string> legal_moves_uci(const std::string& fen) override;
         std::string apply_move(const std::string& fen, const std::string& uci) override;
 
         std::string getBestMove(int max_depth = 4);
+        std::string buildFen() const;
+        void flipPosition();
 
     private:
         struct Move { int from; int to; int prom_piece; bool is_castling = false; int rook_from = -1; int rook_to = -1; };
@@ -43,7 +44,6 @@ namespace engine
         inline int popcount64(uint64_t x) { return __builtin_popcountll(x); }
 #endif
         void parseCastling(const std::string& s);
-        void flipPosition();
         int alphaBeta(int depth, int alpha, int beta, int ply_remaining);
         int evaluate();
         void generateLegalMoves(int ply_remaining, std::vector<Move>& moves);

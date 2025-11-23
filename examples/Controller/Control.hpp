@@ -2,41 +2,39 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include "../chessnative2/EngineBase.h" // use shared abstract base
 
 namespace controller {
 
-struct IChessEngine {
-    virtual ~IChessEngine() = default;
-    virtual std::vector<std::string> legal_moves(const std::string& fen) = 0;
-    virtual std::string choose_move(const std::string& fen, int depth) = 0;
-    virtual std::vector<std::pair<std::string,int>> root_search_scores(const std::string& fen, int depth) { return {}; }
-    virtual std::string apply_move(const std::string& fen, const std::string& uci) { return {}; }
-};
 
+    
 class GameController {
 public:
-    explicit GameController(IChessEngine& engine);
-    void set_engine(IChessEngine& engine); // allow engine swap mid game
+    explicit GameController(engine::EngineBase& engine);
+    void set_engine(engine::EngineBase& engine);
     void reset();
-    bool load_fen(const std::string& fen); // returns false if parse failed
-    bool undo(); // revert to previous position if available
+    bool load_fen(const std::string& fen);
+    bool undo();
     const std::string& current_fen() const { return currentFEN; }
     bool white_to_move() const { return whiteToMove; }
     int fullmove_number() const { return fullmoveNumber; }
     const std::vector<std::string>& fen_history() const { return fenHistory; }
     const std::string& pgn() const { return pgnString; }
 
-    // Engine interaction
-    std::vector<std::string> legal_moves();
-    std::string engine_move(int depth); // apply engine chosen move, return UCI or empty
-    bool apply_human_move(const std::string& uci); // black move when engine is white
+    std::vector<std::string> legal_moves_uci();
+    std::vector<std::string> legal_moves() { return legal_moves_uci(); }
+    std::string engine_move(int depth);
+    bool apply_human_move(const std::string& uci);
 
-    // Board access
     const char* board() const { return boardSquares; }
     char piece_at(int sq) const { return (sq>=0 && sq<64)? boardSquares[sq] : '.'; }
 
+    // Utility static methods for tests
+    static std::vector<std::string> splitStringBySpace(const std::string& s);
+    static std::string flip_fen(const std::string& fen); // new helper
+
 private:
-    IChessEngine* eng; // pointer to allow swapping
+    engine::EngineBase* eng{};
     char boardSquares[64];
     bool whiteToMove = true;
     int fullmoveNumber = 1;
