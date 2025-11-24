@@ -1,42 +1,75 @@
-# Based on the popular LLVM style, modified for strict "one statement per line" rule.
-BasedOnStyle: LLVM
-
-# --- Indentation and Spacing ---
-# Use 4 spaces for indentation.
-IndentWidth: 4
-# Use spaces instead of tabs.
-UseTabs: Never
-# Maximum line length (adjust as needed; a smaller limit encourages more breaks).
-ColumnLimit: 80
-
-# --- Enforcing "One Statement Per Line" ---
-# Prevents putting short 'if' statements on the same line (e.g., 'if (a) return;').
-AllowShortIfStatementsOnASingleLine: Never
-# Prevents putting short loops on the same line (e.g., 'while (true) break;').
-AllowShortLoopsOnASingleLine: false
-# Prevents putting empty or short blocks {} on a single line.
-AllowShortBlocksOnASingleLine: false
-
-# --- Brace Placement and New Lines ---
-# Put the opening brace of a function on a new line.
-BreakBeforeBraces: Linux
-# Ensure a new line before an 'else' statement.
-AlwaysBreakBeforeElse: true
-# Control of individual brace wrapping cases
-BraceWrapping:
-  AfterClass: true
-  AfterControlStatement: true
-  AfterFunction: true
-  AfterEnum: true
-  AfterStruct: true
-  AfterUnion: true
-  BeforeCatch: true
-  BeforeElse: true
-  # Add a new line after the opening brace of a control statement
-  AfterControlStatementBranch: true
-
-# --- General C++ Options ---
-# Aligns pointers to the left (e.g., 'int* ptr' instead of 'int *ptr').
-PointerAlignment: Left
-# Language the style is for.
 Language: Cpp
+AccessModifierOffset: -4
+AlignAfterOpenBracket: false
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignEscapedNewlinesLeft: false
+AlignOperands: true
+AlignTrailingComments: false
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowShortBlocksOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+AlwaysBreakAfterDefinitionReturnType: None
+AlwaysBreakAfterReturnType: None
+AlwaysBreakBeforeMultilineStrings: false
+AlwaysBreakTemplateDeclarations: false
+BinPackArguments: true
+BinPackParameters: true
+BraceWrapping:
+  AfterClass:      true
+  AfterControlStatement: true
+  AfterEnum:       true
+  AfterFunction:   true
+  AfterNamespace:  true
+  AfterObjCDeclaration: true
+  AfterStruct:     true
+  AfterUnion:      false
+  BeforeCatch:     true
+  BeforeElse:      true
+  IndentBraces:    false
+BreakBeforeBinaryOperators: None
+BreakBeforeBraces: Allman
+BreakBeforeTernaryOperators: true
+BreakConstructorInitializersBeforeComma: false
+ColumnLimit: 0
+CommentPragmas: '^ IWYU pragma:'
+ConstructorInitializerAllOnOneLineOrOnePerLine: false
+ConstructorInitializerIndentWidth: 0
+ContinuationIndentWidth: 4
+Cpp11BracedListStyle: true
+DerivePointerAlignment: false
+DisableFormat: false
+ExperimentalAutoDetectBinPacking: false
+ForEachMacros: [ foreach, Q_FOREACH, BOOST_FOREACH ]
+IndentCaseLabels: true
+IndentWidth: 4
+IndentWrappedFunctionNames: false
+KeepEmptyLinesAtTheStartOfBlocks: true
+MacroBlockBegin: ''
+MacroBlockEnd: ''
+MaxEmptyLinesToKeep: 2
+NamespaceIndentation: None
+PenaltyBreakBeforeFirstCallParameter: 100
+PenaltyBreakComment: 300
+PenaltyBreakFirstLessLess: 120
+PenaltyBreakString: 1000
+PenaltyExcessCharacter: 10000
+PointerAlignment: Left
+ReflowComments: true
+SortIncludes: false
+SpaceAfterCStyleCast: false
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeParens: ControlStatements
+SpaceInEmptyParentheses: false
+SpacesBeforeTrailingComments: 1
+SpacesInAngles: true
+SpacesInContainerLiterals: true
+SpacesInCStyleCastParentheses: true
+SpacesInParentheses: true
+SpacesInSquareBrackets: true
+Standard: Cpp11
+TabWidth: 4
+UseTab: Never

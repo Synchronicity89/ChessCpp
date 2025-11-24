@@ -33,10 +33,10 @@ private:
     static inline int file_of(int sq){ return sq & 7; }
     static inline int rank_of(int sq){ return sq >> 3; }
 #if defined(_MSC_VER)
-    static inline int lsb_index(U64 x){ unsigned long idx; _BitScanForward64(&idx,x); return (int)idx; }
+    static inline int lsb_index(U64 x){ if(!x) return -1; unsigned long idx; _BitScanForward64(&idx,x); return (int)idx; }
     static inline int popcount64(U64 x){ return (int)__popcnt64(x); }
 #else
-    static inline int lsb_index(U64 x){ return (int)__builtin_ctzll(x); }
+    static inline int lsb_index(U64 x){ return x ? (int)__builtin_ctzll(x) : -1; }
     static inline int popcount64(U64 x){ return (int)__builtin_popcountll(x); }
 #endif
     static void init_masks();
